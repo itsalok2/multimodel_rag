@@ -15,6 +15,35 @@
 
 ---
 
+## 🧠 Model Selection & Hardware Tiering (Local 6GB VRAM & Cloud Options)
+
+To accommodate both local edge hardware constraints (e.g. 6GB GPU VRAM) and high-accuracy frontier reasoning, the architecture supports three model profiles:
+
+### 1. Local Text & Reasoning Models (LLMs)
+| Model | Size & VRAM (4-bit Q4_K_M) | Best Use Case | Performance on 6GB VRAM |
+|---|---|---|---|
+| **`qwen2.5:7b-instruct`** ⭐ | ~4.7 GB | **Top Open-Source Pick**: Outstanding at structured JSON output, mathematical reasoning, and prompt constraints. | Fits 100% in VRAM (~25–35 tok/s). |
+| **`llama3.1:8b-instruct`** | ~4.7 GB | Repository baseline; solid instruction following and general text synthesis. | Fits 100% in VRAM (~20–30 tok/s). |
+| **`qwen2.5:3b-instruct`** | ~2.0 GB | Ultra-fast lightweight reasoning; great for low-latency query planning. | Fits 100% in VRAM (> 50 tok/s). |
+| **`llama3.2:3b-instruct`** | ~2.0 GB | Fast conversational edge model; minimal memory footprint. | Fits 100% in VRAM (> 50 tok/s). |
+
+### 2. Local Vision-Language Models (VLMs for Slides/Diagrams)
+| Model | Size & VRAM (4-bit Q4_K_M) | Best Use Case | Performance on 6GB VRAM |
+|---|---|---|---|
+| **`qwen2.5-vl:7b`** ⭐ | ~5.0 GB | **King of Open Vision**: Dynamic resolution, reads dense charts, flowcharts, and technical equations without distortion. | Fits in 6GB VRAM (~15–20 tok/s). |
+| **`minicpm-v:8b` (v2.6)** | ~5.5 GB | Outperforms Llama 3.2 Vision on OCRBench & MathVista; great slide detail extraction. | Fits in 6GB VRAM (~12–18 tok/s). |
+| **`llama3.2-vision:11b`** | ~7.9 GB | Baseline repo model; general scene understanding. | Spills slightly to CPU RAM (~4–8 tok/s). |
+| **`moondream2`** (1.8B) | ~1.5 GB | Tiny, ultra-fast visual inspector for slide-vs-face frame filtering. | Fits easily in VRAM (> 40 tok/s). |
+
+### 3. High-Performance Cloud Fallback (Optional, Cost-Effective)
+| Model | Provider | Token Window | Cost Profile & Value |
+|---|---|---|---|
+| **`Gemini 2.0 Flash`** ⭐ | Google AI Studio | **1,000,000 tokens** | **Virtually instant** (< 500ms TTFT), native multimodal video/image reasoning, dirt cheap (~$0.10/M tokens with generous free tier). |
+| **`Gemini 1.5 Flash-8B`** | Google AI Studio | **1,000,000 tokens** | Ultra-lightweight cloud model for batch Q&A. |
+| **`Claude 3.5 Sonnet`** | Anthropic API | 200,000 tokens | Industry gold standard for complex STEM diagrams and LaTeX derivations. |
+
+---
+
 ## 🏛️ End-to-End System Architecture
 
 ```text
@@ -114,11 +143,19 @@ Verify existing functionality and resolve configuration inconsistencies before w
    docker compose up -d
    curl http://localhost:6333/healthz  # Expected: 200 OK
    ```
-3. Verify Ollama local models:
-   ```bash
-   ollama pull llama3.1:8b-instruct-fp16
-   ollama pull llama3.2-vision:11b
-   ```
+3. Verify Ollama local models (choose based on VRAM profile):
+   - **Recommended Fast Setup (6GB VRAM)**:
+     ```bash
+     ollama pull qwen2.5:7b-instruct
+     ollama pull qwen2.5-vl:7b
+     # Or ultra-fast lightweight:
+     # ollama pull qwen2.5:3b-instruct
+     ```
+   - **Baseline Repo Setup**:
+     ```bash
+     ollama pull llama3.1:8b-instruct
+     ollama pull llama3.2-vision:11b
+     ```
 4. Run preprocessing on a single test video (3–5 minutes):
    ```bash
    python scripts/preprocess_videos.py --video data/videos/sample.mp4
@@ -380,7 +417,7 @@ Ensure visual questions are validated by a vision model and that answers never h
 
 #### Tasks:
 1. **VLM Verification Tool (`src/inference/vision_llm.py`)**:
-   - Send only the top 2–3 visual candidates to `llama3.2-vision:11b` via Ollama.
+   - Send only the top 2–3 visual candidates to VLM (`qwen2.5-vl:7b`, `minicpm-v:8b`, or `llama3.2-vision:11b` via Ollama; or `Gemini 2.0 Flash` via API).
    - Prompt format:
      ```text
      Examine this lecture frame and determine if it answers: "{query}".
